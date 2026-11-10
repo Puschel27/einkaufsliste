@@ -4,25 +4,41 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Einkaufsliste</title>
-<meta name="theme-color" content="#2f9e5b">
+<meta name="theme-color" content="#23955a">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Einkauf">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap">
 <link rel="stylesheet" href="style.css">
 <script type="module" src="app.js"></script>
 </head>
 <body>
 
-<header class="top">
-  <h1>Einkaufsliste <span id="zaehler" class="zaehler"></span></h1>
-  <button id="konto-btn" class="icon-btn" hidden aria-label="Konto">👤</button>
+<!-- Kopfbereich der Liste -->
+<header id="kopf" class="kopf" hidden>
+  <div class="kopf-innen">
+    <div class="kopf-zeile">
+      <div>
+        <p class="gruss" id="gruss">Hallo!</p>
+        <h1>Einkaufsliste</h1>
+      </div>
+      <button id="konto-btn" class="avatar" aria-label="Konto">?</button>
+    </div>
+    <div class="fortschritt" id="fortschritt">
+      <div class="balken"><div class="balken-fuell" id="balken"></div></div>
+      <p id="zaehler" class="zaehler"></p>
+    </div>
+  </div>
 </header>
 
 <main>
   <!-- Ladeanzeige -->
-  <section id="v-laden" class="view center"><p class="muted">Lädt …</p></section>
+  <section id="v-laden" class="view center"><div class="lader"></div></section>
 
   <!-- Noch nicht eingerichtet -->
   <section id="v-setup" class="view" hidden>
@@ -34,6 +50,11 @@
 
   <!-- Anmelden / Registrieren -->
   <section id="v-login" class="view" hidden>
+    <div class="hero">
+      <img src="icon-192.png" alt="" class="hero-icon">
+      <h1>Einkaufsliste</h1>
+      <p>Unsere gemeinsame Liste – immer aktuell, auf jedem Handy.</p>
+    </div>
     <form id="login-form" class="box" novalidate>
       <h2 id="login-titel">Anmelden</h2>
       <input id="login-email" type="email" inputmode="email" autocomplete="email" placeholder="E-Mail-Adresse" required>
@@ -41,23 +62,25 @@
       <input id="login-passwort2" type="password" autocomplete="new-password" placeholder="Passwort wiederholen" hidden>
       <button class="primary" type="submit" id="login-knopf">Anmelden</button>
       <button type="button" class="link" id="login-modus">Neu hier? Konto erstellen</button>
-      <button type="button" class="link" id="passwort-vergessen">Passwort vergessen?</button>
+      <button type="button" class="link leise" id="passwort-vergessen">Passwort vergessen?</button>
     </form>
   </section>
 
   <!-- Hinweis nach Registrierung / Passwort-Mail -->
   <section id="v-info" class="view" hidden>
-    <div class="box">
+    <div class="box center-box">
+      <div class="gross-emoji">📬</div>
       <h2>Bitte E-Mails prüfen</h2>
       <p id="info-text"></p>
       <p class="muted">Keine E-Mail bekommen? Schau auch im Spam-Ordner nach.</p>
-      <button id="info-ok">Zur Anmeldung</button>
+      <button id="info-ok" class="primary">Zur Anmeldung</button>
     </div>
   </section>
 
   <!-- Neues Passwort nach "Passwort vergessen" -->
   <section id="v-passwort-neu" class="view" hidden>
     <form id="passwort-neu-form" class="box" novalidate>
+      <div class="gross-emoji">🔑</div>
       <h2>Neues Passwort</h2>
       <input id="pn-passwort" type="password" autocomplete="new-password" placeholder="Neues Passwort (mind. 8 Zeichen)" required>
       <input id="pn-passwort2" type="password" autocomplete="new-password" placeholder="Passwort wiederholen" required>
@@ -67,17 +90,19 @@
 
   <!-- Erster Login: Name -->
   <section id="v-name" class="view" hidden>
-    <form id="name-form" class="box" novalidate>
+    <form id="name-form" class="box center-box" novalidate>
+      <div class="gross-emoji">👋</div>
       <h2>Willkommen!</h2>
       <p class="muted">Wie sollen dich die anderen sehen? (z. B. „Mama“ oder „Tim“)</p>
       <input id="name-input" maxlength="30" autocomplete="given-name" placeholder="Dein Name" required>
-      <button class="primary" type="submit">Weiter</button>
+      <button class="primary" type="submit">Los geht's</button>
     </form>
   </section>
 
   <!-- Nicht freigeschaltet -->
   <section id="v-kein-zugang" class="view" hidden>
-    <div class="box">
+    <div class="box center-box">
+      <div class="gross-emoji">🔒</div>
       <h2>Kein Zugang</h2>
       <p>Die Adresse <strong id="kz-email"></strong> ist nicht für diese Einkaufsliste freigeschaltet. Bitte melde dich bei der Person, die die Liste verwaltet.</p>
       <button id="kz-abmelden">Abmelden</button>
@@ -87,28 +112,37 @@
   <!-- Die Liste -->
   <section id="v-liste" class="view" hidden>
     <div id="liste"></div>
-    <p id="leer" class="leer" hidden>Alles erledigt! 🎉<br><span class="muted">Mit + fügst du etwas hinzu.</span></p>
+    <div id="leer" class="leer" hidden>
+      <div class="leer-emoji">🛒</div>
+      <p class="leer-titel">Der Einkaufswagen ist leer</p>
+      <p class="muted">Tippe auf <strong>+</strong>, um etwas hinzuzufügen.</p>
+    </div>
 
     <details id="erledigt-bereich" class="erledigt" hidden>
-      <summary>Erledigt (<span id="erledigt-anzahl">0</span>)</summary>
+      <summary><span>✓ Erledigt (<span id="erledigt-anzahl">0</span>)</span></summary>
       <ul id="erledigt-liste" class="items"></ul>
       <button id="erledigt-loeschen" class="danger-link">Erledigte entfernen</button>
     </details>
 
-    <button id="neu" class="fab" aria-label="Artikel hinzufügen">+</button>
+    <button id="neu" class="fab" aria-label="Artikel hinzufügen"><span>+</span></button>
   </section>
 </main>
 
 <!-- Artikel hinzufügen / bearbeiten -->
-<dialog id="dlg">
+<dialog id="dlg" class="sheet">
   <form id="artikel-form" novalidate>
+    <div class="griff"></div>
     <h2 id="dlg-titel">Hinzufügen</h2>
-    <label>Was?<input id="a-name" maxlength="100" autocomplete="off" placeholder="z. B. Milch" required></label>
+    <label>Was wird gebraucht?<input id="a-name" maxlength="100" autocomplete="off" placeholder="z. B. Milch" required></label>
     <div class="zeile">
       <label class="klein">Menge<input id="a-menge" maxlength="30" autocomplete="off" placeholder="2 l"></label>
-      <label>Kategorie<select id="a-kategorie"></select></label>
+      <label>Notiz<input id="a-notiz" maxlength="200" autocomplete="off" placeholder="z. B. laktosefrei"></label>
     </div>
-    <label>Notiz<input id="a-notiz" maxlength="200" autocomplete="off" placeholder="z. B. laktosefrei"></label>
+    <div>
+      <span class="feld-titel">Kategorie</span>
+      <input type="hidden" id="a-kategorie">
+      <div class="chips" id="chips" role="radiogroup" aria-label="Kategorie"></div>
+    </div>
     <div class="knoepfe">
       <button type="button" id="a-loeschen" class="danger-link" hidden>Löschen</button>
       <span class="spacer"></span>
@@ -119,8 +153,9 @@
 </dialog>
 
 <!-- Konto -->
-<dialog id="dlg-konto">
+<dialog id="dlg-konto" class="sheet">
   <form id="konto-form" novalidate>
+    <div class="griff"></div>
     <h2>Konto</h2>
     <p class="muted" id="konto-email"></p>
     <label>Dein Name<input id="konto-name" maxlength="30" required></label>

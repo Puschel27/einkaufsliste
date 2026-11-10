@@ -4,6 +4,10 @@ import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 // Reihenfolge = Reihenfolge der Gänge im Laden
 const KATEGORIEN = ['Obst & Gemüse', 'Brot & Backwaren', 'Kühlregal', 'Fleisch & Fisch', 'Tiefkühl',
   'Vorräte', 'Getränke', 'Süßes & Snacks', 'Drogerie', 'Haushalt', 'Sonstiges'];
+const KAT_ICON = {
+  'Obst & Gemüse': '🥦', 'Brot & Backwaren': '🥖', 'Kühlregal': '🧀', 'Fleisch & Fisch': '🥩', 'Tiefkühl': '🧊',
+  'Vorräte': '🥫', 'Getränke': '🥤', 'Süßes & Snacks': '🍫', 'Drogerie': '🧴', 'Haushalt': '🧽', 'Sonstiges': '📦'
+};
 
 // Stichworte für den Kategorie-Vorschlag
 const STICHWORTE = {
@@ -46,7 +50,29 @@ let passwortReset = location.hash.includes('type=recovery');
 
 function zeige(id) {
   document.querySelectorAll('.view').forEach(v => v.hidden = v.id !== id);
-  $('konto-btn').hidden = id !== 'v-liste';
+  $('kopf').hidden = id !== 'v-liste';
+}
+
+function nameAnzeigen() {
+  $('gruss').textContent = `Hallo ${meinName} 👋`;
+  $('konto-btn').textContent = (meinName.trim()[0] || '?').toUpperCase();
+}
+
+// Kleine Überraschung, wenn alles abgehakt ist
+function feiern() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const zeichen = ['🎉', '✨', '🥕', '🍎', '🥖', '🧀', '🎊', '💚'];
+  for (let i = 0; i < 28; i++) {
+    const s = el('span', zeichen[i % zeichen.length], 'konfetti');
+    s.style.left = Math.random() * 100 + 'vw';
+    s.style.setProperty('--dx', (Math.random() * 160 - 80) + 'px');
+    s.style.setProperty('--dreh', (Math.random() * 720 - 360) + 'deg');
+    s.style.setProperty('--dauer', (1.6 + Math.random() * 1.4) + 's');
+    s.style.animationDelay = Math.random() * .4 + 's';
+    document.body.append(s);
+    setTimeout(() => s.remove(), 3600);
+  }
+  toast('Alles erledigt – super! 🎉');
 }
 
 function el(tag, text, cls) {
@@ -115,6 +141,7 @@ async function sitzung(session) {
   const { data: profil } = await sb.from('profile').select('name').eq('id', user.id).maybeSingle();
   if (!profil) { zeige('v-name'); $('name-input').focus(); return; }
   meinName = profil.name;
+  nameAnzeigen();
   listeStarten();
 }
 
@@ -199,6 +226,7 @@ $('name-form').addEventListener('submit', async ev => {
   const { error } = await sb.from('profile').upsert({ id: user.id, name });
   if (error) { toast(fehlerText(error), true); return; }
   meinName = name;
+  nameAnzeigen();
   listeStarten();
 });
 
@@ -245,14 +273,19 @@ function render() {
   for (const kat of KATEGORIEN) {
     const eintraege = offen.filter(a => (KATEGORIEN.includes(a.kategorie) ? a.kategorie : 'Sonstiges') === kat);
     if (!eintraege.length) continue;
-    liste.append(el('h2', kat, 'kat'));
+    const h = el('h2', null, 'kat');
+    h.append(el('span', KAT_ICON[kat], 'kat-icon'), el('span', kat), el('span', eintraege.length, 'kat-anzahl'));
+    liste.append(h);
     const ul = el('ul', null, 'items');
     eintraege.forEach(a => ul.append(eintrag(a)));
     liste.append(ul);
   }
 
   $('leer').hidden = offen.length > 0;
-  $('zaehler').textContent = offen.length ? `(${offen.length})` : '';
+  $('balken').style.width = artikel.length ? (erledigt.length / artikel.length * 100) + '%' : '0';
+  $('zaehler').textContent = !artikel.length ? 'Noch nichts auf der Liste'
+    : !offen.length ? 'Alles erledigt! 🎉'
+    : `${offen.length} Artikel offen` + (erledigt.length ? ` · ${erledigt.length} erledigt` : '');
   $('erledigt-bereich').hidden = erledigt.length === 0;
   $('erledigt-anzahl').textContent = erledigt.length;
   $('erledigt-liste').replaceChildren(...erledigt.map(eintrag));
@@ -263,7 +296,7 @@ function eintrag(a) {
 
   const check = el('button', null, 'check');
   check.setAttribute('aria-label', a.erledigt ? `${a.name} wieder auf die Liste` : `${a.name} abhaken`);
-  check.onclick = () => umschalten(a);
+  check.onclick = () => umschalten(a, li);
 
   const txt = el('button', null, 'txt');
   txt.onclick = () => dialogOeffnen(a);
@@ -278,9 +311,19 @@ function eintrag(a) {
   return li;
 }
 
-async function umschalten(a) {
+async function umschalten(a, li) {
   a.erledigt = !a.erledigt;
-  render();
+  if (a.erledigt) {
+    // Erst kurz die Abhak-Animation zeigen, dann einsortieren
+    li.classList.add('done', 'ploppt');
+    if (navigator.vibrate) navigator.vibrate(12);
+    setTimeout(() => {
+      render();
+      if (artikel.length && artikel.every(x => x.erledigt)) feiern();
+    }, 380);
+  } else {
+    render();
+  }
   const { error } = await sb.from('artikel').update({ erledigt: a.erledigt }).eq('id', a.id);
   if (error) { a.erledigt = !a.erledigt; render(); toast(fehlerText(error), true); }
 }
@@ -295,7 +338,20 @@ $('erledigt-loeschen').onclick = async () => {
 
 // ---------- Hinzufügen / Bearbeiten ----------
 
-$('a-kategorie').append(...KATEGORIEN.map(k => el('option', k)));
+// Kategorie-Auswahl als antippbare Chips
+for (const k of KATEGORIEN) {
+  const chip = el('button', `${KAT_ICON[k]} ${k}`, 'chip');
+  chip.type = 'button';
+  chip.dataset.kat = k;
+  chip.setAttribute('role', 'radio');
+  chip.onclick = () => { kategorieGewaehlt = true; katSetzen(k); };
+  $('chips').append(chip);
+}
+
+function katSetzen(k) {
+  $('a-kategorie').value = k;
+  document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-checked', c.dataset.kat === k));
+}
 
 function dialogOeffnen(a) {
   editId = a ? a.id : null;
@@ -306,7 +362,7 @@ function dialogOeffnen(a) {
   $('a-name').value = a ? a.name : '';
   $('a-menge').value = a && a.menge || '';
   $('a-notiz').value = a && a.notiz || '';
-  $('a-kategorie').value = a ? a.kategorie : 'Sonstiges';
+  katSetzen(a ? a.kategorie : 'Sonstiges');
   kategorieGewaehlt = !!a;
   $('dlg').showModal();
   if (!a) $('a-name').focus();
@@ -314,9 +370,8 @@ function dialogOeffnen(a) {
 
 $('a-name').addEventListener('input', () => {
   if (kategorieGewaehlt) return;
-  $('a-kategorie').value = kategorieRaten($('a-name').value) || 'Sonstiges';
+  katSetzen(kategorieRaten($('a-name').value) || 'Sonstiges');
 });
-$('a-kategorie').addEventListener('change', () => kategorieGewaehlt = true);
 
 $('artikel-form').addEventListener('submit', async ev => {
   ev.preventDefault();
@@ -339,7 +394,7 @@ $('artikel-form').addEventListener('submit', async ev => {
     // Dialog offen lassen, damit man gleich das Nächste eintragen kann
     toast(`${werte.name} hinzugefügt`);
     $('a-name').value = $('a-menge').value = $('a-notiz').value = '';
-    $('a-kategorie').value = 'Sonstiges';
+    katSetzen('Sonstiges');
     kategorieGewaehlt = false;
     $('a-name').focus();
   }
@@ -378,6 +433,7 @@ $('konto-form').addEventListener('submit', async ev => {
     if (pwFehler) { toast(fehlerText(pwFehler), true); return; }
   }
   meinName = name;
+  nameAnzeigen();
   $('dlg-konto').close();
   toast(passwort ? 'Name und Passwort gespeichert.' : 'Name gespeichert.');
   laden();
