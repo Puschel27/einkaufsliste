@@ -384,10 +384,15 @@ function eintrag(a) {
   z1.append(el('span', a.name, 'name'));
   if (a.laden) z1.append(el('span', '🏪 ' + a.laden, 'laden'));
   txt.append(z1);
-  const info = [a.notiz, a.profil && a.profil.name ? 'von ' + a.profil.name : null].filter(Boolean).join(' · ');
-  if (info) txt.append(el('div', info, 'sub'));
+  if (a.notiz) txt.append(el('div', a.notiz, 'sub'));
 
   li.append(check, txt);
+  // Wer es eingetragen hat – klein am rechten Rand, spart eine Zeile
+  if (a.profil && a.profil.name) {
+    const von = el('span', a.profil.name, 'von');
+    von.title = 'eingetragen von ' + a.profil.name;
+    li.append(von);
+  }
 
   const url = a.foto && fotoUrls.get(a.foto);
   if (url) {
