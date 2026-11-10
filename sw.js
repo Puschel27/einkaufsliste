@@ -1,6 +1,6 @@
 // Service Worker: macht die Seite installierbar und lädt sie schneller.
 // Strategie "erst Netzwerk, dann Cache", damit Updates sofort ankommen.
-const CACHE = 'einkaufsliste-v4';
+const CACHE = 'einkaufsliste-v5';
 const DATEIEN = ['./', './index.html', './style.css', './app.js', './config.js',
   './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
@@ -18,8 +18,10 @@ self.addEventListener('activate', ev => {
 self.addEventListener('fetch', ev => {
   const url = new URL(ev.request.url);
   if (ev.request.method !== 'GET' || url.origin !== location.origin) return;
+  // cache: 'no-cache' fragt immer beim Server nach, ob es eine neue Version gibt
+  // (sonst liefert das Handy bis zu 10 Minuten lang alte Dateien aus seinem Speicher)
   ev.respondWith(
-    fetch(ev.request)
+    fetch(ev.request.url, { cache: 'no-cache' })
       .then(res => {
         const kopie = res.clone();
         caches.open(CACHE).then(c => c.put(ev.request, kopie));
