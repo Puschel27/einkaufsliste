@@ -41,6 +41,13 @@ let artikel = [];
 let kanal = null;
 let ladeTimer = null;
 let editId = null;
+// Foto-Zustand im Dialog
+let fotoAlt = null;       // gespeicherter Pfad des bearbeiteten Artikels
+let fotoNeu = null;       // neu gewähltes, verkleinertes Bild (Blob)
+let fotoEntfernt = false;
+// Fotos liegen in einem privaten Speicher; Anzeige über zeitlich begrenzte Links
+const fotoUrls = new Map();
+let fotoUrlsZeit = Date.now();
 let kategorieGewaehlt = false;
 let registrieren = false;
 // Kommt man über den Link aus der "Passwort vergessen"-Mail, zuerst neues Passwort setzen lassen
@@ -252,11 +259,38 @@ function aufraeumen() {
 
 async function laden() {
   const { data, error } = await sb.from('artikel')
-    .select('id, name, menge, notiz, kategorie, erledigt, erstellt_am, profil:profile(name)')
+    .select('id, name, menge, notiz, laden, foto, kategorie, erledigt, erstellt_am, profil:profile(name)')
     .order('erstellt_am');
   if (error) { toast('Liste konnte nicht geladen werden.', true); return; }
   artikel = data;
+  await fotoUrlsHolen();
   render();
+}
+
+async function fotoUrlsHolen() {
+  // Links gelten 24 Stunden – rechtzeitig erneuern, falls die App lange offen ist
+  if (Date.now() - fotoUrlsZeit > 20 * 3600 * 1000) { fotoUrls.clear(); fotoUrlsZeit = Date.now(); }
+  const fehlend = [...new Set(artikel.map(a => a.foto).filter(p => p && !fotoUrls.has(p)))];
+  if (!fehlend.length) return;
+  const { data } = await sb.storage.from('fotos').createSignedUrls(fehlend, 24 * 3600);
+  (data || []).forEach(d => { if (d.signedUrl) fotoUrls.set(d.path, d.signedUrl); });
+}
+
+async function fotosLoeschen(pfade) {
+  pfade = pfade.filter(Boolean);
+  if (pfade.length) await sb.storage.from('fotos').remove(pfade);
+}
+
+// Verkleinert Handyfotos (oft 3–8 MB) auf max. 1280 px als JPEG (~150–300 KB)
+async function bildVerkleinern(datei) {
+  const bild = await createImageBitmap(datei, { imageOrientation: 'from-image' });
+  const faktor = Math.min(1, 1280 / Math.max(bild.width, bild.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bild.width * faktor);
+  c.height = Math.round(bild.height * faktor);
+  c.getContext('2d').drawImage(bild, 0, 0, c.width, c.height);
+  bild.close();
+  return new Promise((ok, fehler) => c.toBlob(b => b ? ok(b) : fehler(new Error('toBlob')), 'image/jpeg', 0.82));
 }
 
 function spaeterLaden() {
@@ -303,11 +337,25 @@ function eintrag(a) {
   const z1 = el('div', null, 'z1');
   if (a.menge) z1.append(el('span', a.menge, 'menge'));
   z1.append(el('span', a.name, 'name'));
+  if (a.laden) z1.append(el('span', '🏪 ' + a.laden, 'laden'));
   txt.append(z1);
   const info = [a.notiz, a.profil && a.profil.name ? 'von ' + a.profil.name : null].filter(Boolean).join(' · ');
   if (info) txt.append(el('div', info, 'sub'));
 
   li.append(check, txt);
+
+  const url = a.foto && fotoUrls.get(a.foto);
+  if (url) {
+    const thumb = el('button', null, 'thumb');
+    thumb.setAttribute('aria-label', `Foto von ${a.name} anzeigen`);
+    const img = el('img');
+    img.src = url;
+    img.alt = '';
+    img.loading = 'lazy';
+    thumb.append(img);
+    thumb.onclick = () => fotoZeigen(url, a.name);
+    li.append(thumb);
+  }
   return li;
 }
 
@@ -330,8 +378,10 @@ async function umschalten(a, li) {
 
 $('erledigt-loeschen').onclick = async () => {
   if (!confirm('Alle erledigten Artikel endgültig entfernen?')) return;
+  const fotos = artikel.filter(a => a.erledigt).map(a => a.foto);
   const { error } = await sb.from('artikel').delete().eq('erledigt', true);
   if (error) { toast(fehlerText(error), true); return; }
+  fotosLoeschen(fotos);
   toast('Erledigte entfernt.');
   laden();
 };
@@ -362,8 +412,16 @@ function dialogOeffnen(a) {
   $('a-name').value = a ? a.name : '';
   $('a-menge').value = a && a.menge || '';
   $('a-notiz').value = a && a.notiz || '';
+  $('a-laden').value = a && a.laden || '';
+  // Vorschläge: alle bisher verwendeten Läden
+  const laeden = [...new Set(artikel.map(x => x.laden).filter(Boolean))].sort((x, y) => x.localeCompare(y, 'de'));
+  $('laeden').replaceChildren(...laeden.map(l => { const o = el('option'); o.value = l; return o; }));
   katSetzen(a ? a.kategorie : 'Sonstiges');
   kategorieGewaehlt = !!a;
+  fotoAlt = a ? a.foto : null;
+  fotoNeu = null;
+  fotoEntfernt = false;
+  fotoVorschau(fotoAlt ? fotoUrls.get(fotoAlt) : null);
   $('dlg').showModal();
   if (!a) $('a-name').focus();
 }
@@ -379,22 +437,42 @@ $('artikel-form').addEventListener('submit', async ev => {
     name: $('a-name').value.trim(),
     menge: $('a-menge').value.trim() || null,
     notiz: $('a-notiz').value.trim() || null,
-    kategorie: $('a-kategorie').value
+    laden: $('a-laden').value.trim() || null,
+    kategorie: $('a-kategorie').value,
+    foto: fotoEntfernt ? null : fotoAlt
   };
   if (!werte.name) { toast('Bitte eintragen, was gebraucht wird.', true); $('a-name').focus(); return; }
 
-  const { error } = editId
-    ? await sb.from('artikel').update(werte).eq('id', editId)
-    : await sb.from('artikel').insert(werte);
-  if (error) { toast(fehlerText(error), true); return; }
+  const knopf = $('a-speichern');
+  knopf.disabled = true;
+  try {
+    let hochgeladen = null;
+    if (fotoNeu) {
+      hochgeladen = `${user.id}/${crypto.randomUUID()}.jpg`;
+      const { error: fotoFehler } = await sb.storage.from('fotos').upload(hochgeladen, fotoNeu, { contentType: 'image/jpeg' });
+      if (fotoFehler) { toast('Das Foto konnte nicht hochgeladen werden.', true); return; }
+      werte.foto = hochgeladen;
+    }
+
+    const { error } = editId
+      ? await sb.from('artikel').update(werte).eq('id', editId)
+      : await sb.from('artikel').insert(werte);
+    if (error) { fotosLoeschen([hochgeladen]); toast(fehlerText(error), true); return; }
+    // Ersetztes oder entferntes Foto aufräumen
+    if (fotoAlt && fotoAlt !== werte.foto) fotosLoeschen([fotoAlt]);
+  } finally {
+    knopf.disabled = false;
+  }
 
   if (editId) {
     $('dlg').close();
   } else {
     // Dialog offen lassen, damit man gleich das Nächste eintragen kann
     toast(`${werte.name} hinzugefügt`);
-    $('a-name').value = $('a-menge').value = $('a-notiz').value = '';
+    $('a-name').value = $('a-menge').value = $('a-notiz').value = $('a-laden').value = '';
     katSetzen('Sonstiges');
+    fotoNeu = null;
+    fotoVorschau(null);
     kategorieGewaehlt = false;
     $('a-name').focus();
   }
@@ -404,9 +482,49 @@ $('artikel-form').addEventListener('submit', async ev => {
 $('a-loeschen').onclick = async () => {
   const { error } = await sb.from('artikel').delete().eq('id', editId);
   if (error) { toast(fehlerText(error), true); return; }
+  fotosLoeschen([fotoAlt]);
   $('dlg').close();
   laden();
 };
+
+// ---------- Fotos ----------
+
+function fotoVorschau(url) {
+  const img = $('a-foto-vorschau');
+  img.hidden = !url;
+  if (url) img.src = url; else img.removeAttribute('src');
+  $('a-foto-weg').hidden = !url;
+  $('a-foto-text').textContent = url ? 'Anderes Foto' : 'Foto hinzufügen';
+}
+
+$('a-foto').addEventListener('change', async ev => {
+  const datei = ev.target.files[0];
+  ev.target.value = '';
+  if (!datei) return;
+  try {
+    fotoNeu = await bildVerkleinern(datei);
+  } catch {
+    toast('Dieses Bild kann leider nicht verwendet werden.', true);
+    return;
+  }
+  fotoEntfernt = false;
+  fotoVorschau(URL.createObjectURL(fotoNeu));
+});
+
+$('a-foto-weg').onclick = () => {
+  fotoNeu = null;
+  fotoEntfernt = true;
+  fotoVorschau(null);
+};
+
+function fotoZeigen(url, name) {
+  $('foto-gross').src = url;
+  $('foto-gross').alt = `Foto von ${name}`;
+  $('dlg-foto').showModal();
+}
+$('foto-zu').onclick = () => $('dlg-foto').close();
+// Tippen neben das Bild schließt die Ansicht
+$('dlg-foto').addEventListener('click', ev => { if (ev.target.id === 'dlg-foto') $('dlg-foto').close(); });
 
 $('a-abbrechen').onclick = () => $('dlg').close();
 $('neu').onclick = () => dialogOeffnen(null);

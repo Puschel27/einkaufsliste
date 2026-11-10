@@ -1,6 +1,6 @@
 // Service Worker: macht die Seite installierbar und lädt sie schneller.
 // Strategie "erst Netzwerk, dann Cache", damit Updates sofort ankommen.
-const CACHE = 'einkaufsliste-v2';
+const CACHE = 'einkaufsliste-v3';
 const DATEIEN = ['./', './index.html', './style.css', './app.js', './config.js',
   './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 

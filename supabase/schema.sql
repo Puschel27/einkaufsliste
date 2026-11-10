@@ -64,6 +64,23 @@ grant select, insert, update, delete on public.artikel to authenticated;
 -- Live-Aktualisierung auf allen Handys
 alter publication supabase_realtime add table public.artikel;
 
+-- Laden-Feld und Fotos (identisch mit update-1-laden-fotos.sql)
+alter table public.artikel add column if not exists laden text check (char_length(laden) <= 40);
+alter table public.artikel add column if not exists foto text check (char_length(foto) <= 200);
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('fotos', 'fotos', false, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do nothing;
+
+create policy "Familie sieht Fotos" on storage.objects
+  for select to authenticated using (bucket_id = 'fotos' and public.ist_familie());
+create policy "Familie lädt Fotos hoch" on storage.objects
+  for insert to authenticated with check (
+    bucket_id = 'fotos' and public.ist_familie() and (storage.foldername(name))[1] = auth.uid()::text
+  );
+create policy "Familie löscht Fotos" on storage.objects
+  for delete to authenticated using (bucket_id = 'fotos' and public.ist_familie());
+
 -- 4) Familienmitglieder freischalten (weitere Adressen einfach ergänzen)
 insert into public.erlaubte_emails (email) values
   ('absolutefrische@web.de')
