@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Einkaufsliste</title>
+<meta name="theme-color" content="#2f9e5b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Einkauf">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <h1>Einkaufsliste <span id="zaehler" class="zaehler"></span></h1>
+  <button id="konto-btn" class="icon-btn" hidden aria-label="Konto">👤</button>
+</header>
+
+<main>
+  <!-- Ladeanzeige -->
+  <section id="v-laden" class="view center"><p class="muted">Lädt …</p></section>
+
+  <!-- Noch nicht eingerichtet -->
+  <section id="v-setup" class="view" hidden>
+    <div class="box">
+      <h2>Noch nicht eingerichtet</h2>
+      <p>Bitte in <code>config.js</code> die Supabase-Adresse und den Schlüssel eintragen.</p>
+    </div>
+  </section>
+
+  <!-- Anmeldung: E-Mail -->
+  <section id="v-login" class="view" hidden>
+    <form id="login-form" class="box" novalidate>
+      <h2>Anmelden</h2>
+      <p class="muted">Gib deine E-Mail-Adresse ein. Du bekommst einen Anmelde-Code per E-Mail.</p>
+      <input id="login-email" type="email" inputmode="email" autocomplete="email" placeholder="name@beispiel.de" required>
+      <button class="primary" type="submit">Code anfordern</button>
+    </form>
+  </section>
+
+  <!-- Anmeldung: Code -->
+  <section id="v-code" class="view" hidden>
+    <form id="code-form" class="box" novalidate>
+      <h2>Code eingeben</h2>
+      <p class="muted">Wir haben eine E-Mail an <strong id="code-email"></strong> geschickt. Gib den Code aus der E-Mail ein.</p>
+      <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" required>
+      <button class="primary" type="submit">Anmelden</button>
+      <button type="button" class="link" id="code-zurueck">Andere E-Mail verwenden</button>
+    </form>
+  </section>
+
+  <!-- Erster Login: Name -->
+  <section id="v-name" class="view" hidden>
+    <form id="name-form" class="box" novalidate>
+      <h2>Willkommen!</h2>
+      <p class="muted">Wie sollen dich die anderen sehen? (z. B. „Mama“ oder „Tim“)</p>
+      <input id="name-input" maxlength="30" autocomplete="given-name" placeholder="Dein Name" required>
+      <button class="primary" type="submit">Weiter</button>
+    </form>
+  </section>
+
+  <!-- Nicht freigeschaltet -->
+  <section id="v-kein-zugang" class="view" hidden>
+    <div class="box">
+      <h2>Kein Zugang</h2>
+      <p>Die Adresse <strong id="kz-email"></strong> ist nicht für diese Einkaufsliste freigeschaltet. Bitte melde dich bei der Person, die die Liste verwaltet.</p>
+      <button id="kz-abmelden">Abmelden</button>
+    </div>
+  </section>
+
+  <!-- Die Liste -->
+  <section id="v-liste" class="view" hidden>
+    <div id="liste"></div>
+    <p id="leer" class="leer" hidden>Alles erledigt! 🎉<br><span class="muted">Mit + fügst du etwas hinzu.</span></p>
+
+    <details id="erledigt-bereich" class="erledigt" hidden>
+      <summary>Erledigt (<span id="erledigt-anzahl">0</span>)</summary>
+      <ul id="erledigt-liste" class="items"></ul>
+      <button id="erledigt-loeschen" class="danger-link">Erledigte entfernen</button>
+    </details>
+
+    <button id="neu" class="fab" aria-label="Artikel hinzufügen">+</button>
+  </section>
+</main>
+
+<!-- Artikel hinzufügen / bearbeiten -->
+<dialog id="dlg">
+  <form id="artikel-form" novalidate>
+    <h2 id="dlg-titel">Hinzufügen</h2>
+    <label>Was?<input id="a-name" maxlength="100" autocomplete="off" placeholder="z. B. Milch" required></label>
+    <div class="zeile">
+      <label class="klein">Menge<input id="a-menge" maxlength="30" autocomplete="off" placeholder="2 l"></label>
+      <label>Kategorie<select id="a-kategorie"></select></label>
+    </div>
+    <label>Notiz<input id="a-notiz" maxlength="200" autocomplete="off" placeholder="z. B. laktosefrei"></label>
+    <div class="knoepfe">
+      <button type="button" id="a-loeschen" class="danger-link" hidden>Löschen</button>
+      <span class="spacer"></span>
+      <button type="button" id="a-abbrechen">Fertig</button>
+      <button type="submit" class="primary" id="a-speichern">Hinzufügen</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Konto -->
+<dialog id="dlg-konto">
+  <form id="konto-form" novalidate>
+    <h2>Konto</h2>
+    <p class="muted" id="konto-email"></p>
+    <label>Dein Name<input id="konto-name" maxlength="30" required></label>
+    <div class="knoepfe">
+      <button type="button" id="abmelden" class="danger-link">Abmelden</button>
+      <span class="spacer"></span>
+      <button type="button" id="konto-abbrechen">Abbrechen</button>
+      <button type="submit" class="primary">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" role="status"></div>
+</body>
+</html>
