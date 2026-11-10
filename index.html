@@ -32,24 +32,36 @@
     </div>
   </section>
 
-  <!-- Anmeldung: E-Mail -->
+  <!-- Anmelden / Registrieren -->
   <section id="v-login" class="view" hidden>
     <form id="login-form" class="box" novalidate>
-      <h2>Anmelden</h2>
-      <p class="muted">Gib deine E-Mail-Adresse ein. Du bekommst einen Anmelde-Code per E-Mail.</p>
-      <input id="login-email" type="email" inputmode="email" autocomplete="email" placeholder="name@beispiel.de" required>
-      <button class="primary" type="submit">Code anfordern</button>
+      <h2 id="login-titel">Anmelden</h2>
+      <input id="login-email" type="email" inputmode="email" autocomplete="email" placeholder="E-Mail-Adresse" required>
+      <input id="login-passwort" type="password" autocomplete="current-password" placeholder="Passwort" required>
+      <input id="login-passwort2" type="password" autocomplete="new-password" placeholder="Passwort wiederholen" hidden>
+      <button class="primary" type="submit" id="login-knopf">Anmelden</button>
+      <button type="button" class="link" id="login-modus">Neu hier? Konto erstellen</button>
+      <button type="button" class="link" id="passwort-vergessen">Passwort vergessen?</button>
     </form>
   </section>
 
-  <!-- Anmeldung: Code -->
-  <section id="v-code" class="view" hidden>
-    <form id="code-form" class="box" novalidate>
-      <h2>Code eingeben</h2>
-      <p class="muted">Wir haben eine E-Mail an <strong id="code-email"></strong> geschickt. Gib den Code aus der E-Mail ein.</p>
-      <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" required>
-      <button class="primary" type="submit">Anmelden</button>
-      <button type="button" class="link" id="code-zurueck">Andere E-Mail verwenden</button>
+  <!-- Hinweis nach Registrierung / Passwort-Mail -->
+  <section id="v-info" class="view" hidden>
+    <div class="box">
+      <h2>Bitte E-Mails prüfen</h2>
+      <p id="info-text"></p>
+      <p class="muted">Keine E-Mail bekommen? Schau auch im Spam-Ordner nach.</p>
+      <button id="info-ok">Zur Anmeldung</button>
+    </div>
+  </section>
+
+  <!-- Neues Passwort nach "Passwort vergessen" -->
+  <section id="v-passwort-neu" class="view" hidden>
+    <form id="passwort-neu-form" class="box" novalidate>
+      <h2>Neues Passwort</h2>
+      <input id="pn-passwort" type="password" autocomplete="new-password" placeholder="Neues Passwort (mind. 8 Zeichen)" required>
+      <input id="pn-passwort2" type="password" autocomplete="new-password" placeholder="Passwort wiederholen" required>
+      <button class="primary" type="submit">Passwort speichern</button>
     </form>
   </section>
 
@@ -112,6 +124,7 @@
     <h2>Konto</h2>
     <p class="muted" id="konto-email"></p>
     <label>Dein Name<input id="konto-name" maxlength="30" required></label>
+    <label>Neues Passwort (nur wenn du es ändern willst)<input id="konto-passwort" type="password" autocomplete="new-password" placeholder="mind. 8 Zeichen"></label>
     <div class="knoepfe">
       <button type="button" id="abmelden" class="danger-link">Abmelden</button>
       <span class="spacer"></span>

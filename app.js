@@ -38,7 +38,9 @@ let kanal = null;
 let ladeTimer = null;
 let editId = null;
 let kategorieGewaehlt = false;
-let loginEmail = '';
+let registrieren = false;
+// Kommt man über den Link aus der "Passwort vergessen"-Mail, zuerst neues Passwort setzen lassen
+let passwortReset = location.hash.includes('type=recovery');
 
 // ---------- Hilfsfunktionen ----------
 
@@ -65,7 +67,11 @@ function toast(msg, fehler = false) {
 function fehlerText(error) {
   const m = (error && error.message || '').toLowerCase();
   if (m.includes('rate limit') || m.includes('security purposes')) return 'Zu viele Versuche – bitte in ein paar Minuten erneut probieren.';
-  if (m.includes('expired') || m.includes('invalid')) return 'Der Code ist falsch oder abgelaufen.';
+  if (m.includes('invalid login credentials')) return 'E-Mail oder Passwort falsch.';
+  if (m.includes('email not confirmed')) return 'Bitte zuerst die E-Mail-Adresse über den Link in der Bestätigungs-Mail bestätigen.';
+  if (m.includes('already registered')) return 'Für diese E-Mail gibt es schon ein Konto – bitte anmelden.';
+  if (m.includes('password')) return 'Das Passwort ist zu schwach (mind. 8 Zeichen).';
+  if (m.includes('expired') || m.includes('invalid')) return 'Der Link ist ungültig oder abgelaufen.';
   if (m.includes('fetch') || m.includes('network')) return 'Keine Verbindung zum Internet.';
   return 'Es ist ein Fehler aufgetreten.';
 }
@@ -95,6 +101,7 @@ function kategorieRaten(name) {
 // ---------- Anmeldung ----------
 
 async function sitzung(session) {
+  if (passwortReset) { zeige('v-passwort-neu'); return; }
   const neu = session ? session.user : null;
   if (user && neu && neu.id === user.id) return; // z. B. Token erneuert
   user = neu;
@@ -111,35 +118,79 @@ async function sitzung(session) {
   listeStarten();
 }
 
+const APP_URL = location.origin + location.pathname;
+const emailOk = e => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
+
+function loginModus(neu) {
+  registrieren = neu;
+  $('login-titel').textContent = neu ? 'Konto erstellen' : 'Anmelden';
+  $('login-knopf').textContent = neu ? 'Konto erstellen' : 'Anmelden';
+  $('login-modus').textContent = neu ? 'Schon ein Konto? Anmelden' : 'Neu hier? Konto erstellen';
+  $('login-passwort').placeholder = neu ? 'Passwort (mind. 8 Zeichen)' : 'Passwort';
+  $('login-passwort').autocomplete = neu ? 'new-password' : 'current-password';
+  $('login-passwort2').hidden = !neu;
+  $('passwort-vergessen').hidden = neu;
+}
+
+function info(text) {
+  $('info-text').textContent = text;
+  zeige('v-info');
+}
+
+$('login-modus').onclick = () => loginModus(!registrieren);
+$('info-ok').onclick = () => { loginModus(false); zeige('v-login'); };
+
 $('login-form').addEventListener('submit', async ev => {
   ev.preventDefault();
   const email = $('login-email').value.trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { toast('Bitte eine gültige E-Mail-Adresse eingeben.', true); return; }
-  const btn = ev.submitter; btn.disabled = true;
-  const { error } = await sb.auth.signInWithOtp({
-    email, options: { emailRedirectTo: location.origin + location.pathname }
-  });
+  const passwort = $('login-passwort').value;
+  if (!emailOk(email)) { toast('Bitte eine gültige E-Mail-Adresse eingeben.', true); return; }
+  if (registrieren) {
+    if (passwort.length < 8) { toast('Das Passwort muss mindestens 8 Zeichen haben.', true); return; }
+    if (passwort !== $('login-passwort2').value) { toast('Die Passwörter stimmen nicht überein.', true); return; }
+  } else if (!passwort) { toast('Bitte das Passwort eingeben.', true); return; }
+
+  const btn = $('login-knopf'); btn.disabled = true;
+  const { data, error } = registrieren
+    ? await sb.auth.signUp({ email, password: passwort, options: { emailRedirectTo: APP_URL } })
+    : await sb.auth.signInWithPassword({ email, password: passwort });
   btn.disabled = false;
   if (error) { toast(fehlerText(error), true); return; }
-  loginEmail = email;
-  $('code-email').textContent = email;
-  $('code').value = '';
-  zeige('v-code');
-  $('code').focus();
+
+  $('login-passwort').value = $('login-passwort2').value = '';
+  if (registrieren && !data.session) {
+    // Supabase meldet bei bereits registrierten Adressen keinen Fehler, sondern einen Benutzer ohne Identitäten
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      toast('Für diese E-Mail gibt es schon ein Konto – bitte anmelden.', true);
+      loginModus(false);
+      return;
+    }
+    info(`Wir haben eine E-Mail an ${email} geschickt. Bitte klicke auf den Link darin, um deine Adresse zu bestätigen. Danach kannst du dich hier anmelden.`);
+  }
+  // Erfolgreiche Anmeldung: onAuthStateChange übernimmt
 });
 
-$('code-form').addEventListener('submit', async ev => {
+$('passwort-vergessen').onclick = async () => {
+  const email = $('login-email').value.trim();
+  if (!emailOk(email)) { toast('Bitte zuerst oben deine E-Mail-Adresse eingeben.', true); $('login-email').focus(); return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: APP_URL });
+  if (error) { toast(fehlerText(error), true); return; }
+  info(`Wir haben eine E-Mail an ${email} geschickt. Über den Link darin kannst du ein neues Passwort festlegen.`);
+};
+
+$('passwort-neu-form').addEventListener('submit', async ev => {
   ev.preventDefault();
-  const token = $('code').value.replace(/\D/g, '');
-  if (token.length < 6) { toast('Bitte den Code aus der E-Mail eingeben.', true); return; }
-  const btn = ev.submitter; btn.disabled = true;
-  const { error } = await sb.auth.verifyOtp({ email: loginEmail, token, type: 'email' });
-  btn.disabled = false;
-  if (error) toast(fehlerText(error), true);
-  // Erfolg: onAuthStateChange übernimmt
+  const passwort = $('pn-passwort').value;
+  if (passwort.length < 8) { toast('Das Passwort muss mindestens 8 Zeichen haben.', true); return; }
+  if (passwort !== $('pn-passwort2').value) { toast('Die Passwörter stimmen nicht überein.', true); return; }
+  const { error } = await sb.auth.updateUser({ password: passwort });
+  if (error) { toast(fehlerText(error), true); return; }
+  toast('Passwort gespeichert.');
+  passwortReset = false;
+  history.replaceState(null, '', APP_URL);
+  const { data } = await sb.auth.getSession();
+  sitzung(data.session);
 });
-
-$('code-zurueck').onclick = () => zeige('v-login');
 
 $('name-form').addEventListener('submit', async ev => {
   ev.preventDefault();
@@ -310,18 +361,25 @@ $('neu').onclick = () => dialogOeffnen(null);
 $('konto-btn').onclick = () => {
   $('konto-email').textContent = user.email;
   $('konto-name').value = meinName;
+  $('konto-passwort').value = '';
   $('dlg-konto').showModal();
 };
 $('konto-abbrechen').onclick = () => $('dlg-konto').close();
 $('konto-form').addEventListener('submit', async ev => {
   ev.preventDefault();
   const name = $('konto-name').value.trim();
+  const passwort = $('konto-passwort').value;
   if (!name) return;
+  if (passwort && passwort.length < 8) { toast('Das Passwort muss mindestens 8 Zeichen haben.', true); return; }
   const { error } = await sb.from('profile').update({ name }).eq('id', user.id);
   if (error) { toast(fehlerText(error), true); return; }
+  if (passwort) {
+    const { error: pwFehler } = await sb.auth.updateUser({ password: passwort });
+    if (pwFehler) { toast(fehlerText(pwFehler), true); return; }
+  }
   meinName = name;
   $('dlg-konto').close();
-  toast('Name gespeichert.');
+  toast(passwort ? 'Name und Passwort gespeichert.' : 'Name gespeichert.');
   laden();
 });
 $('abmelden').onclick = async () => {
@@ -335,7 +393,10 @@ if (!sb) {
   zeige('v-setup');
 } else {
   // Supabase-Aufrufe nicht direkt im Callback ausführen (sonst kann es hängen)
-  sb.auth.onAuthStateChange((_event, session) => setTimeout(() => sitzung(session), 0));
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === 'PASSWORD_RECOVERY') passwortReset = true;
+    setTimeout(() => sitzung(session), 0);
+  });
   // Handys pausieren die Live-Verbindung im Hintergrund – beim Zurückkehren neu laden
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && user && kanal) laden();
