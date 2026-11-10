@@ -48,6 +48,10 @@ let fotoEntfernt = false;
 // Fotos liegen in einem privaten Speicher; Anzeige über zeitlich begrenzte Links
 const fotoUrls = new Map();
 let fotoUrlsZeit = Date.now();
+// Gewählter Laden-Filter (normalisierter Name) – pro Gerät gemerkt
+let ladenFilter = null;
+try { ladenFilter = localStorage.getItem('ladenFilter'); } catch { }
+let doppelt = null; // vorhandener Artikel mit gleichem Namen (im Dialog)
 let kategorieGewaehlt = false;
 let registrieren = false;
 // Kommt man über den Link aus der "Passwort vergessen"-Mail, zuerst neues Passwort setzen lassen
@@ -107,6 +111,17 @@ function fehlerText(error) {
   if (m.includes('expired') || m.includes('invalid')) return 'Der Link ist ungültig oder abgelaufen.';
   if (m.includes('fetch') || m.includes('network')) return 'Keine Verbindung zum Internet.';
   return 'Es ist ein Fehler aufgetreten.';
+}
+
+const norm = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+// "Banane" = "bananen", "Ei" = "Eier" nicht (zu kurz), "Tomate" = "Tomaten"
+function gleicherName(x, y) {
+  x = norm(x); y = norm(y);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [kurz, lang] = x.length < y.length ? [x, y] : [y, x];
+  return kurz.length >= 3 && lang.startsWith(kurz) && ['n', 'en', 'e', 's'].includes(lang.slice(kurz.length));
 }
 
 function kategorieRaten(name) {
@@ -302,10 +317,17 @@ function render() {
   const offen = artikel.filter(a => !a.erledigt);
   const erledigt = artikel.filter(a => a.erledigt);
 
+  // Laden-Filter: nur Läden anbieten, für die noch etwas offen ist
+  const laeden = new Map();
+  offen.forEach(a => { if (a.laden && !laeden.has(norm(a.laden))) laeden.set(norm(a.laden), a.laden.trim()); });
+  const filter = laeden.has(ladenFilter) ? ladenFilter : null;
+  filterRendern(laeden, offen, filter);
+  const sichtbar = filter ? offen.filter(a => !a.laden || norm(a.laden) === filter) : offen;
+
   const liste = $('liste');
   liste.replaceChildren();
   for (const kat of KATEGORIEN) {
-    const eintraege = offen.filter(a => (KATEGORIEN.includes(a.kategorie) ? a.kategorie : 'Sonstiges') === kat);
+    const eintraege = sichtbar.filter(a => (KATEGORIEN.includes(a.kategorie) ? a.kategorie : 'Sonstiges') === kat);
     if (!eintraege.length) continue;
     const h = el('h2', null, 'kat');
     h.append(el('span', KAT_ICON[kat], 'kat-icon'), el('span', kat), el('span', eintraege.length, 'kat-anzahl'));
@@ -323,6 +345,29 @@ function render() {
   $('erledigt-bereich').hidden = erledigt.length === 0;
   $('erledigt-anzahl').textContent = erledigt.length;
   $('erledigt-liste').replaceChildren(...erledigt.map(eintrag));
+}
+
+function filterRendern(laeden, offen, filter) {
+  $('laden-filter-bereich').hidden = laeden.size === 0;
+  if (!laeden.size) return;
+  const chip = (wert, text) => {
+    const b = el('button', text, 'chip');
+    b.type = 'button';
+    b.setAttribute('aria-pressed', filter === wert);
+    b.onclick = () => {
+      ladenFilter = wert;
+      try { wert ? localStorage.setItem('ladenFilter', wert) : localStorage.removeItem('ladenFilter'); } catch { }
+      render();
+    };
+    return b;
+  };
+  const sortiert = [...laeden].sort((x, y) => x[1].localeCompare(y[1], 'de'));
+  $('laden-filter').replaceChildren(
+    chip(null, 'Alle'),
+    ...sortiert.map(([k, name]) => chip(k, `🏪 ${name} (${offen.filter(a => norm(a.laden) === k).length})`))
+  );
+  $('filter-hinweis').hidden = !filter;
+  if (filter) $('filter-hinweis').textContent = `Zeigt Artikel für ${laeden.get(filter)} und alles ohne festen Laden.`;
 }
 
 function eintrag(a) {
@@ -422,11 +467,26 @@ function dialogOeffnen(a) {
   fotoNeu = null;
   fotoEntfernt = false;
   fotoVorschau(fotoAlt ? fotoUrls.get(fotoAlt) : null);
-  $('dlg').showModal();
+  doppeltPruefen();
+  if (!$('dlg').open) $('dlg').showModal();
   if (!a) $('a-name').focus();
 }
 
+// Hinweis, wenn der Artikel schon (offen) auf der Liste steht
+function doppeltPruefen() {
+  doppelt = editId ? null : artikel.find(a => !a.erledigt && gleicherName(a.name, $('a-name').value));
+  $('a-doppelt').hidden = !doppelt;
+  $('a-speichern').textContent = editId ? 'Speichern' : doppelt ? 'Trotzdem hinzufügen' : 'Hinzufügen';
+  if (!doppelt) return;
+  const details = [doppelt.menge, doppelt.laden && '🏪 ' + doppelt.laden,
+    doppelt.profil && doppelt.profil.name && 'von ' + doppelt.profil.name].filter(Boolean).join(' · ');
+  $('a-doppelt-text').textContent = `⚠️ ${doppelt.name} steht schon auf der Liste` + (details ? ` (${details})` : '');
+}
+
+$('a-doppelt-oeffnen').onclick = () => dialogOeffnen(doppelt);
+
 $('a-name').addEventListener('input', () => {
+  doppeltPruefen();
   if (kategorieGewaehlt) return;
   katSetzen(kategorieRaten($('a-name').value) || 'Sonstiges');
 });
@@ -474,6 +534,7 @@ $('artikel-form').addEventListener('submit', async ev => {
     fotoNeu = null;
     fotoVorschau(null);
     kategorieGewaehlt = false;
+    doppeltPruefen();
     $('a-name').focus();
   }
   laden();

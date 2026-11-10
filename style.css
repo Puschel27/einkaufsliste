@@ -202,9 +202,26 @@ dialog label, .feld-titel { font-size: 14px; font-weight: 700; color: var(--mute
   font-size: 14px; font-weight: 700; padding: 7px 12px; border-radius: 99px;
   background: var(--surface-2); border: 1.5px solid var(--border); color: var(--text);
 }
-.chip[aria-checked="true"] {
+.chip[aria-checked="true"], .chip[aria-pressed="true"] {
   background: var(--accent-soft); border-color: var(--accent); color: var(--kat);
 }
+
+/* ---------- Laden-Filter & Doppelt-Hinweis ---------- */
+.filter {
+  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+  margin: 18px -16px 0; padding: 2px 16px;
+}
+.filter::-webkit-scrollbar { display: none; }
+.filter .chip { flex: none; background: var(--surface); box-shadow: var(--shadow); border-color: transparent; }
+.filter .chip[aria-pressed="true"] { border-color: var(--accent); }
+.filter-hinweis { font-size: 13px; color: var(--muted); margin: 8px 6px 0; }
+.doppelt {
+  display: flex; align-items: center; gap: 10px; margin-top: -4px;
+  background: var(--laden-soft); color: var(--laden); border-radius: 12px;
+  padding: 8px 12px; font-size: 14px; font-weight: 700;
+}
+.doppelt span { flex: 1; }
+.doppelt .link { color: var(--laden); text-decoration: underline; padding: 4px 0; flex: none; }
 
 /* ---------- Fotos ---------- */
 .foto-feld { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
